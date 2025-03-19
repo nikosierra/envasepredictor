@@ -1,44 +1,191 @@
 <!DOCTYPE html>
-<html lang="es">
+<html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Teachable Machine Demo</title>
+    <title>Envase Predictor</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            margin: 0;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            background-color: #fff;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+            width: 300px;
+            text-align: center;
+        }
+        .upload-btn {
+            background-color: #4285f4;
+            color: white;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            margin-bottom: 20px;
+        }
+        .upload-btn:hover {
+            background-color: #357ae8;
+        }
+        #label-container div {
+            margin: 5px 0;
+            padding: 10px;
+            border-radius: 5px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border: 2px solid #e0e0e0;
+            background-color: #f0f0f0;
+        }
+        .prediction {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            width: 100%;
+        }
+        .bar {
+            height: 10px;
+            border-radius: 5px;
+            margin-left: 10px;
+            flex-grow: 1;
+            position: relative;
+            background-color: transparent;
+        }
+        .bar span {
+            position: absolute;
+            right: 5px;
+            top: -20px;
+            font-size: 12px;
+        }
+        .drop-zone {
+            border: 2px dashed #ccc;
+            border-radius: 10px;
+            padding: 20px;
+            cursor: pointer;
+            margin-bottom: 20px;
+        }
+        .drop-zone.dragover {
+            border-color: #4285f4;
+        }
+        .image-preview {
+            max-width: 100%;
+            margin-bottom: 20px;
+        }
+    </style>
 </head>
 <body>
-    <h1>Clasificador con Teachable Machine</h1>
-    <video id="webcam" autoplay></video>
-    <button onclick="predict()">Predecir</button>
-    <p id="result">Esperando predicción...</p>
+    <div class="container">
+        <div>Envase Predictor</div>
+        <div class="drop-zone" id="drop-zone">Arrastra una imagen aquí o haz clic para seleccionar</div>
+        <input type="file" id="image-upload" accept="image/*" style="display: none;" onchange="handleImageUpload(event)">
+        <img id="image-preview" class="image-preview" src="" alt="Image Preview">
+        <div id="label-container"></div>
+    </div>
 
-    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@teachablemachine/image"></script>
-    <script>
-        const URL = "https://teachablemachine.withgoogle.com/models/C2AjUP1dC/";
-        let model, webcam, maxPredictions;
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@latest/dist/tf.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@teachablemachine/image@latest/dist/teachablemachine-image.min.js"></script>
+    <script type="text/javascript">
+        const URL_MODEL = "https://teachablemachine.withgoogle.com/models/C2AjUP1dC/";
+
+        let model, labelContainer, maxPredictions;
 
         async function init() {
-            const modelURL = URL + "model.json";
-            const metadataURL = URL + "metadata.json";
-            model = await tmImage.load(modelURL, metadataURL);
-            maxPredictions = model.getTotalClasses();
-            const video = document.getElementById("webcam");
-            webcam = new tmImage.Webcam(200, 200, true);
-            await webcam.setup();
-            await webcam.play();
-            video.srcObject = webcam.webcam;
-            requestAnimationFrame(loop);
+            console.log("Initializing model...");
+            const modelURL = URL_MODEL + "model.json";
+            const metadataURL = URL_MODEL + "metadata.json";
+
+            try {
+                model = await tmImage.load(modelURL, metadataURL);
+                maxPredictions = model.getTotalClasses();
+                console.log("Model loaded successfully");
+
+                labelContainer = document.getElementById("label-container");
+                for (let i = 0; i < maxPredictions; i++) {
+                    const div = document.createElement("div");
+                    div.className = "prediction";
+                    const label = document.createElement("span");
+                    const bar = document.createElement("div");
+                    bar.className = "bar";
+                    bar.appendChild(document.createElement("span"));
+                    div.appendChild(label);
+                    div.appendChild(bar);
+                    labelContainer.appendChild(div);
+                }
+            } catch (error) {
+                console.error("Error loading model:", error);
+            }
         }
 
-        async function loop() {
-            webcam.update();
-            requestAnimationFrame(loop);
+        async function handleImageUpload(event) {
+            console.log("Image upload triggered");
+            const file = event.target.files[0];
+            if (file) {
+                console.log("File selected:", file.name);
+                const image = document.getElementById("image-preview");
+                image.src = window.URL.createObjectURL(file);
+                image.onload = async () => {
+                    console.log("Image loaded");
+                    try {
+                        const prediction = await model.predict(image);
+                        console.log("Prediction:", prediction);
+
+                        // Find the prediction with the highest probability
+                        let maxPredictionIndex = 0;
+                        for (let i = 1; i < maxPredictions; i++) {
+                            if (prediction[i].probability > prediction[maxPredictionIndex].probability) {
+                                maxPredictionIndex = i;
+                            }
+                        }
+
+                        for (let i = 0; i < maxPredictions; i++) {
+                            const classPrediction = prediction[i].className + ": " + (prediction[i].probability * 100).toFixed(2) + "%";
+                            const label = labelContainer.childNodes[i].querySelector("span");
+                            const bar = labelContainer.childNodes[i].querySelector(".bar");
+                            const barLabel = bar.querySelector("span");
+                            label.innerHTML = prediction[i].className;
+                            label.style.color = getColor(i);
+                            bar.style.width = "100%";
+                            bar.style.backgroundColor = i === maxPredictionIndex ? getColor(i) : "transparent";
+                            barLabel.innerHTML = (prediction[i].probability * 100).toFixed(2) + "%";
+                            barLabel.style.color = i === maxPredictionIndex ? getColor(i) : "transparent";
+                        }
+                    } catch (error) {
+                        console.error("Error during prediction:", error);
+                    }
+                };
+            } else {
+                console.error("No file selected");
+            }
         }
 
-        async function predict() {
-            const prediction = await model.predict(webcam.canvas);
-            document.getElementById("result").innerText = prediction[0].className;
+        function getColor(index) {
+            const colors = ["#FF5733", "#FF8C33", "#FF33A1", "#FF3333", "#FF5733", "#33FF57", "#33FFF5", "#3357FF", "#8C33FF", "#33FF8C"];
+            return colors[index % colors.length];
         }
+
+        const dropZone = document.getElementById('drop-zone');
+        dropZone.addEventListener('click', () => document.getElementById('image-upload').click());
+        dropZone.addEventListener('dragover', (event) => {
+            event.preventDefault();
+            dropZone.classList.add('dragover');
+        });
+        dropZone.addEventListener('dragleave', () => dropZone.classList.remove('dragover'));
+        dropZone.addEventListener('drop', (event) => {
+            event.preventDefault();
+            dropZone.classList.remove('dragover');
+            const files = event.dataTransfer.files;
+            if (files.length > 0) {
+                document.getElementById('image-upload').files = files;
+                handleImageUpload({ target: { files: files } });
+            }
+        });
 
         init();
     </script>
