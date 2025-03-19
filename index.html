@@ -8,6 +8,10 @@
 <body>
     <div>Teachable Machine Image Model</div>
     <input type="file" id="image-upload" accept="image/*" onchange="handleImageUpload(event)">
+    <div>
+        <h3>Image Preview:</h3>
+        <img id="image-preview" alt="Image Preview" style="max-width: 100%; height: auto; display: none;">
+    </div>
     <div id="label-container"></div>
 
     <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@latest/dist/tf.min.js"></script>
@@ -41,8 +45,14 @@
             const file = event.target.files[0];
             if (file) {
                 console.log("File selected:", file.name);
+
+                // Display the image preview
+                const preview = document.getElementById("image-preview");
+                preview.src = window.URL.createObjectURL(file);
+                preview.style.display = "block";
+
                 const image = document.createElement("img");
-                image.src = window.URL.createObjectURL(file);
+                image.src = preview.src;
                 image.onload = async () => {
                     console.log("Image loaded");
                     try {
